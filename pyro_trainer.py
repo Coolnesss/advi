@@ -1,7 +1,12 @@
 import pyro
 import torch
+import pdb
+import sys
 from torch import nn
-from pyro.distributions import Normal
+from pyro.distributions import Normal, MultivariateNormal
+from torch import nn, tensor
+from pyro.optim import Adam
+from pyro.infer import SVI, Trace_ELBO
 
 # Model for pyro
 class LogisticRegression(nn.Module):
@@ -55,4 +60,50 @@ def train_logreg(data, model):
         # sample a regressor (which also samples w and b)
         return lifted_module()
 
-    
+def gaussian_model(data):
+    mu = tensor([0., 0.])
+    diag1 = pyro.sample("diag1", Normal(0., 2.))
+    diag2 = pyro.sample("diag2", Normal(0., 2.))
+    L = torch.tensor([
+        [diag1, 0.    ],
+        [0.,     diag2]], requires_grad=True)
+
+    #pdb.set_trace()
+
+    gaussian = MultivariateNormal(tensor([0.,0.]), scale_tril=L)
+
+    for i in range(data.size(0)):
+        pyro.sample("obs_{}".format(i), gaussian, obs=data[i])
+
+def gaussian_guide(data):
+    sigma1 = pyro.param("diag1_q", tensor(1.))
+    sigma2 = pyro.param("diag2_q", tensor(1.))
+
+    # Note: This is the posterior distribution over the parameters diag1 and
+    # diag2 and not the data generating distribution.
+    pyro.sample("diag1", Normal(0., sigma1))
+    pyro.sample("diag2", Normal(0., sigma2))
+
+
+def train_gaussian(data):
+    # setup the optimizer
+    adam_params = {"lr": 0.0005, "betas": (0.90, 0.999)}
+    optimizer = Adam(adam_params)
+
+    svi = SVI(gaussian_model, gaussian_guide, optimizer, loss=Trace_ELBO())
+
+    limit = 1000
+
+    # do gradient steps
+    for step in range(limit):
+        svi.step(data)
+        if step % 10 == 0:
+            print("{:}/{:}".format(step, limit))
+            sys.stdout.flush()
+
+
+    diag1_q = pyro.param("diag1_q").item()
+    diag2_q = pyro.param("diag2_q").item()
+
+    print("diag1: {:}, diag2: {:}".format(diag1_q, diag2_q))
+

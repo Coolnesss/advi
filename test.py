@@ -5,7 +5,10 @@ from torch import nn
 import matplotlib.pyplot as plt
 import numpy as np 
 from torch import distributions
-from torch.distributions import Bernoulli, Normal
+from torch.distributions import Bernoulli, Normal, MultivariateNormal
+from torch import Tensor
+
+import pyro_trainer
 
 def log_reg_test():
     X, y = data.create_logreg_dataset()
@@ -28,7 +31,24 @@ def gaussian_test():
     m = advi.ADVI()
     m.learn(posterior_func, n_params=1)
 
+def two_dim_gaussian_test():
+    # Generate a skewed 2D gaussian distribution
+    n_samples = 100
+    sigma = Tensor([
+        [1,     0],
+        [0.9,   1.0]])
+    data = MultivariateNormal(Tensor([0,0]), covariance_matrix=sigma).sample((n_samples, ))
+
+    #plt.scatter(data[:,0].numpy(), data[:,1].numpy(), s=3)
+    #plt.xlim(-4, 4)
+    #plt.ylim(-4, 4)
+    #plt.show()
+
+    pyro_trainer.train_gaussian(data)
+
+
 if __name__ == '__main__':
 
     torch.set_default_dtype(torch.float64)
-    gaussian_test()
+    #gaussian_test()
+    two_dim_gaussian_test()
